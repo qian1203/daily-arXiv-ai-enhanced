@@ -157,6 +157,27 @@ jobs:
         ls data/*.jsonl | sed 's|data/||' > assets/file-list.txt
         echo "文件列表更新完成 / File list updated"
 
+    # 新增：生成docs文件夹并复制前端文件
+    - name: Generate static pages to docs folder
+      if: steps.dedup_check.outputs.has_new_content == 'true'
+      run: |
+        echo "生成静态网页到 docs 文件夹... / Generating static pages to docs folder..."
+        
+        # 创建 docs 文件夹（如果不存在）
+        mkdir -p docs
+        
+        # 复制前端核心文件到 docs 目录
+        cp index.html docs/
+        cp -r css/ docs/
+        cp -r js/ docs/
+        cp -r assets/ docs/
+        cp -r images/ docs/ 2>/dev/null || true  # 忽略images文件夹不存在的情况
+        
+        # 添加 .nojekyll 文件（关键：绕过GitHub Pages的Jekyll构建）
+        touch docs/.nojekyll
+        
+        echo "✅ 静态网页已生成到 docs 文件夹"
+
     - name: Generate password hash and inject into config
       if: steps.dedup_check.outputs.has_new_content == 'true'
       run: |
@@ -234,26 +255,25 @@ jobs:
           exit 1
         fi
 
+    # 修改：提交包括docs文件夹在内的前端文件到main分支
     - name: Commit code changes to main branch
       if: steps.dedup_check.outputs.has_new_content == 'true'
       run: |
         git config --global user.email "${{ vars.EMAIL }}"
         git config --global user.name "${{ vars.NAME }}"
         
-        # 添加所有代码文件，但排除数据文件 / Add all code files, but exclude data files
-        git add js/data-config.js
-        git add .github/
-        # 添加其他可能的代码变更，但排除 data/ 目录和 assets/file-list.txt
-        # Add other possible code changes, but exclude data/ directory and assets/file-list.txt
-        git add -A
-        git reset -- data/* assets/file-list.txt 2>/dev/null || true
+        # 切换回 main 分支（避免之前切到data分支导致提交失败）
+        git checkout main || git checkout -b main
+        
+        # 添加docs文件夹和所有前端代码文件（排除数据文件）
+        git add docs/ js/ css/ index.html assets/ .nojekyll 2>/dev/null || true
         
         # 检查是否有代码变更需要提交 / Check if there are code changes to commit
         if git diff --staged --quiet; then
           echo "没有代码变更需要提交 / No code changes to commit"
         else
-          git commit -m "chore: update data-config.js with repository info"
-          echo "代码变更已提交到 main 分支 / Code changes committed to main branch"
+          git commit -m "chore: update static pages and docs folder $(date +%Y-%m-%d)"
+          echo "代码和docs文件夹已提交到 main 分支 / Code and docs folder committed to main branch"
         fi
 
     - name: Push code changes to main branch
