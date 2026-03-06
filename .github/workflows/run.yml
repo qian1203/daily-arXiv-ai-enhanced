@@ -255,28 +255,28 @@ jobs:
           exit 1
         fi
 
-    # 修改：提交包括docs文件夹在内的前端文件到main分支
+    # 核心修改：强制提交docs文件夹，空提交兜底
     - name: Commit code changes to main branch
-   if: steps.dedup_check.outputs.has_new_content == 'true'
-  run: |
-    git config --global user.email "${{ vars.EMAIL }}"
-    git config --global user.name "${{ vars.NAME }}"
-    
-    # 切换回 main 分支（避免之前切到data分支导致提交失败）
-    git checkout main || git checkout -b main
-    
-    # 强制添加docs文件夹和所有前端代码文件（排除数据文件）
-    git add -f docs/ js/ css/ index.html assets/ 2>/dev/null || true
-    
-    # 检查是否有代码变更需要提交 / Check if there are code changes to commit
-    if git diff --staged --quiet; then
-      echo "没有代码变更需要提交 / No code changes to commit"
-      # 创建空提交以确保跟踪docs文件夹
-      git commit --allow-empty -m "chore: track docs folder"
-    else
-      git commit -m "chore: update static pages and docs folder $(date +%Y-%m-%d)"
-      echo "代码和docs文件夹已提交到 main 分支 / Code and docs folder committed to main branch"
-    fi
+      if: steps.dedup_check.outputs.has_new_content == 'true'
+      run: |
+        git config --global user.email "${{ vars.EMAIL }}"
+        git config --global user.name "${{ vars.NAME }}"
+        
+        # 切换回 main 分支（避免之前切到data分支导致提交失败）
+        git checkout main || git checkout -b main
+        
+        # 强制添加docs文件夹和所有前端文件（-f 忽略.gitignore）
+        git add -f docs/ js/ css/ index.html assets/ 2>/dev/null || true
+        
+        # 检查是否有变更，无变更则创建空提交确保docs被跟踪
+        if git diff --staged --quiet; then
+          echo "检测到无显性变更，创建空提交跟踪docs文件夹"
+          git commit --allow-empty -m "chore: track docs folder for GitHub Pages"
+        else
+          git commit -m "chore: update static pages and docs folder $(date +%Y-%m-%d)"
+          echo "代码和docs文件夹已提交到 main 分支"
+        fi
+
     - name: Push code changes to main branch
       if: steps.dedup_check.outputs.has_new_content == 'true'
       run: |
