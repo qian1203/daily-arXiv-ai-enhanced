@@ -257,7 +257,7 @@ jobs:
 
     # 修改：提交包括docs文件夹在内的前端文件到main分支
     - name: Commit code changes to main branch
-  if: steps.dedup_check.outputs.has_new_content == 'true'
+   if: steps.dedup_check.outputs.has_new_content == 'true'
   run: |
     git config --global user.email "${{ vars.EMAIL }}"
     git config --global user.name "${{ vars.NAME }}"
