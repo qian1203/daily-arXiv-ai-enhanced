@@ -1,5 +1,5 @@
 # This workflow will install Python dependencies, run tests and lint with a single version of Python
-# For more information see https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
+# For more information see https://docs.github.com/en/actions/automating-builds-and-tests/building-testing-python
 
 name: arXiv-daily-ai-enhanced
 
@@ -396,25 +396,32 @@ jobs:
           fi
         done
 
+  # ✅【已修正】独立多用户邮件推送任务，每小时自动运行
   multi-user-email-push:
-    # 等待原项目所有任务执行完成后，再运行邮件推送
-    needs: build
+    if: always()
     runs-on: ubuntu-latest
+    # 必须权限：更新 subscribers.json
+    permissions:
+      contents: write
     steps:
     - uses: actions/checkout@v4
     - name: Install dependencies (匹配原项目环境)
       run: |
         curl -LsSf https://astral.sh/uv/install.sh | sh
         uv sync
-    - name: Run multi-user email push
+    - name: Run multi-subscriber email push
       run: |
         source .venv/bin/activate
-        python run_multi_user.py
+        # 【正确脚本名】与你创建的Python脚本一致
+        python run_multi_subscribers.py
       env:
-        # 原项目AI密钥
+        # GitHub 令牌（更新订阅配置）
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # AI 配置
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
-        # 邮件配置密钥
+        MODEL_NAME: ${{ vars.MODEL_NAME || 'deepseek-chat' }}
+        # 邮件推送配置
         SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
         SMTP_PORT: ${{ secrets.SMTP_PORT }}
         SMTP_USER: ${{ secrets.SMTP_USER }}
