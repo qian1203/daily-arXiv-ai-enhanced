@@ -5,10 +5,9 @@ name: arXiv-daily-ai-enhanced
 
 on:
   schedule:
-    # 原有的每天一次爬取论文（UTC时间 01:30）
-    - cron: "30 1 * * *"
-    # 新增：每小时运行一次，用于检查用户邮件推送条件
-    - cron: "0 * * * *"
+    # 【爬取改为】北京时间 13:00（UTC 05:00）每天执行
+    - cron: "0 5 * * *"
+    - cron: "*/30 * * * *"
   workflow_dispatch:
 
 
