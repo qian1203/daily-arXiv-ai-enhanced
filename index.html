@@ -294,56 +294,137 @@
 const modal = document.getElementById('settingsModal');
 const closeBtn = document.querySelector('.close-btn');
 const saveBtn = document.getElementById('saveBtn');
+const githubTokenInput = document.getElementById('githubToken');
 const emailInput = document.getElementById('email');
 const categoriesInput = document.getElementById('categories');
+const pushFrequencyInput = document.getElementById('pushFrequency');
+const pushTimeInput = document.getElementById('pushTime');
 
-// 1. 页面加载时检查是否已设置
+// 生成唯一用户ID（基于邮箱哈希）
+function generateUserId(email) {
+  let hash = 0;
+  for (let i = 0; i < email.length; i++) {
+    const char = email.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  return 'user_' + Math.abs(hash).toString(16);
+}
+
+// 页面加载时回填已保存的设置
 window.addEventListener('load', () => {
+  const savedToken = localStorage.getItem('github_pat');
   const savedEmail = localStorage.getItem('arxiv_user_email');
   const savedCategories = localStorage.getItem('arxiv_user_categories');
+  const savedFrequency = localStorage.getItem('arxiv_push_frequency');
+  const savedTime = localStorage.getItem('arxiv_push_time');
 
-  // 如果未设置邮箱，自动弹出弹窗
-  if (!savedEmail) {
-    modal.style.display = 'block';
-  } else {
-    // 已设置则回填数据
-    emailInput.value = savedEmail || '';
+  if (savedToken) githubTokenInput.value = savedToken;
+  if (savedEmail) {
+    emailInput.value = savedEmail;
     categoriesInput.value = savedCategories || '';
+    pushFrequencyInput.value = savedFrequency || 'daily';
+    pushTimeInput.value = savedTime || '09';
+  } else {
+    modal.style.display = 'block';
   }
 });
 
-// 2. 关闭弹窗
+// 关闭弹窗
 closeBtn.addEventListener('click', () => modal.style.display = 'none');
 window.addEventListener('click', (e) => {
   if (e.target === modal) modal.style.display = 'none';
 });
 
-// 3. 保存设置
-saveBtn.addEventListener('click', () => {
+// 保存设置并提交到GitHub
+saveBtn.addEventListener('click', async () => {
+  const githubToken = githubTokenInput.value.trim();
   const email = emailInput.value.trim();
   const categories = categoriesInput.value.trim();
+  const frequency = pushFrequencyInput.value;
+  const pushTime = pushTimeInput.value;
 
+  if (!githubToken) {
+    alert('请先输入GitHub Personal Access Token！');
+    return;
+  }
   if (!email) {
     alert('请输入邮箱地址！');
     return;
   }
 
-  // 保存到localStorage
+  // 保存到本地
+  localStorage.setItem('github_pat', githubToken);
   localStorage.setItem('arxiv_user_email', email);
-  if (categories) localStorage.setItem('arxiv_user_categories', categories);
+  localStorage.setItem('arxiv_user_categories', categories);
+  localStorage.setItem('arxiv_push_frequency', frequency);
+  localStorage.setItem('arxiv_push_time', pushTime);
 
-  alert('设置已保存！');
-  modal.style.display = 'none';
-  
-  // 刷新页面以应用新设置
-  location.reload();
+  // 构建用户配置
+  const userId = generateUserId(email);
+  const userConfig = {
+    id: userId,
+    email: email,
+    categories: categories ? categories.split(',').map(c => c.trim()) : ['cs.CV', 'cs.CL', 'cs.AI'],
+    frequency: frequency,
+    pushTime: pushTime,
+    lastPushDate: null,
+    createdAt: new Date().toISOString().split('T')[0]
+  };
+
+  try {
+    // 1. 获取当前subscribers.json的SHA
+    const repoOwner = 'qian1203'; // 替换为你的GitHub用户名
+    const repoName = 'daily-arXiv-ai-enhanced';
+    const fileUrl = `https://api.github.com/repos/${repoOwner}/${repoName}/contents/subscribers.json`;
+    
+    const getFileRes = await fetch(fileUrl, {
+      headers: { 'Authorization': `token ${githubToken}` }
+    });
+    const fileData = await getFileRes.json();
+    const currentSha = fileData.sha;
+    const currentContent = JSON.parse(atob(fileData.content));
+
+    // 2. 更新或添加用户配置
+    const existingIndex = currentContent.findIndex(u => u.id === userId);
+    if (existingIndex >= 0) {
+      currentContent[existingIndex] = { ...currentContent[existingIndex], ...userConfig };
+    } else {
+      currentContent.push(userConfig);
+    }
+
+    // 3. 提交更新到GitHub
+    const updateRes = await fetch(fileUrl, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `token ${githubToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        message: `Update subscription for ${email}`,
+        content: btoa(JSON.stringify(currentContent, null, 2)),
+        sha: currentSha
+      })
+    });
+
+    if (updateRes.ok) {
+      alert('订阅设置已保存！GitHub Actions将按您的设置自动推送论文。');
+      modal.style.display = 'none';
+      location.reload();
+    } else {
+      const error = await updateRes.json();
+      alert(`保存失败：${error.message || '请检查PAT权限是否正确'}`);
+    }
+  } catch (error) {
+    alert(`保存失败：${error.message}`);
+  }
 });
 
-// 4. 点击右上角设置按钮也能打开弹窗
+// 点击右上角齿轮按钮打开弹窗
 const settingsButton = document.querySelector('a[href="settings.html"]').closest('.icon-button');
 if (settingsButton) {
   settingsButton.addEventListener('click', (e) => {
-    e.preventDefault(); // 阻止跳转到settings.html
+    e.preventDefault();
     modal.style.display = 'block';
   });
 }
