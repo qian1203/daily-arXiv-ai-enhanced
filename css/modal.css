@@ -59,3 +59,24 @@
   color: #666;
   line-height: 1.5;
 }
+.form-select {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  box-sizing: border-box;
+  background-color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+}
+.form-select:focus {
+  outline: none;
+  border-color: #2563eb;
+}
+.hint a {
+  color: #2563eb;
+  text-decoration: none;
+}
+.hint a:hover {
+  text-decoration: underline;
+}
