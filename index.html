@@ -362,33 +362,58 @@ saveBtn.addEventListener('click', async () => {
 
   // 构建用户配置
   const userId = generateUserId(email);
-  const userConfig = {
-    id: userId,
-    email: email,
-    categories: categories ? categories.split(',').map(c => c.trim()) : ['cs.CV', 'cs.CL', 'cs.AI'],
-    frequency: frequency,
-    pushTime: pushTime,
-    lastPushDate: null,
-    createdAt: new Date().toISOString().split('T')[0]
-  };
-
+  
   try {
-    // 1. 获取当前subscribers.json的SHA
-    const repoOwner = 'qian1203'; // 替换为你的GitHub用户名
+    // 【重要】请替换为你的GitHub用户名和仓库名
+    const repoOwner = 'qian1203'; 
     const repoName = 'daily-arXiv-ai-enhanced';
     const fileUrl = `https://api.github.com/repos/${repoOwner}/${repoName}/contents/subscribers.json`;
     
+    // 1. 获取当前subscribers.json的SHA
     const getFileRes = await fetch(fileUrl, {
       headers: { 'Authorization': `token ${githubToken}` }
     });
+
+    // ✅ 修正1：先检查API响应状态
+    if (!getFileRes.ok) {
+      const errorText = await getFileRes.text();
+      let errorMsg = '请检查PAT权限是否正确（必须勾选repo权限）';
+      if (getFileRes.status === 401) errorMsg = 'PAT无效，请重新生成';
+      if (getFileRes.status === 404) errorMsg = '仓库或文件不存在，请检查repoOwner和repoName';
+      alert(`保存失败：${errorMsg}`);
+      return;
+    }
+
     const fileData = await getFileRes.json();
     const currentSha = fileData.sha;
-    const currentContent = JSON.parse(atob(fileData.content));
+    
+    // ✅ 修正2：处理空文件/首次使用的情况
+    let currentContent = [];
+    if (fileData.content) {
+      try {
+        currentContent = JSON.parse(atob(fileData.content));
+      } catch (e) {
+        // 如果文件内容不是有效JSON，初始化为空数组
+        currentContent = [];
+      }
+    }
 
-    // 2. 更新或添加用户配置
+    // ✅ 修正3：更新配置时保留原有的lastPushDate
     const existingIndex = currentContent.findIndex(u => u.id === userId);
+    const existingConfig = existingIndex >= 0 ? currentContent[existingIndex] : {};
+    const userConfig = {
+      id: userId,
+      email: email,
+      categories: categories ? categories.split(',').map(c => c.trim()) : ['cs.CV', 'cs.CL', 'cs.AI'],
+      frequency: frequency,
+      pushTime: pushTime,
+      // 保留原有的lastPushDate，避免重复推送
+      lastPushDate: existingConfig.lastPushDate || null,
+      createdAt: existingConfig.createdAt || new Date().toISOString().split('T')[0]
+    };
+
     if (existingIndex >= 0) {
-      currentContent[existingIndex] = { ...currentContent[existingIndex], ...userConfig };
+      currentContent[existingIndex] = userConfig;
     } else {
       currentContent.push(userConfig);
     }
