@@ -1,5 +1,5 @@
 # This workflow will install Python dependencies, run tests and lint with a single version of Python
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
+# For more information see https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
 
 name: arXiv-daily-ai-enhanced
 
@@ -392,3 +392,27 @@ jobs:
             fi
           fi
         done
+
+  multi-user-email-push:
+    # 等待原项目所有任务执行完成后，再运行邮件推送
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install dependencies (匹配原项目环境)
+      run: |
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+        uv sync
+    - name: Run multi-user email push
+      run: |
+        source .venv/bin/activate
+        python run_multi_user.py
+      env:
+        # 原项目AI密钥
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
+        # 邮件配置密钥
+        SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+        SMTP_PORT: ${{ secrets.SMTP_PORT }}
+        SMTP_USER: ${{ secrets.SMTP_USER }}
+        SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
