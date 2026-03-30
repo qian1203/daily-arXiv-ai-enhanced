@@ -1,0 +1,23 @@
+[
+    {
+        "username": "张三",
+        "email": "user1@qq.com",
+        "categories": "cs.CV,cs.AI",
+        "frequency": "daily",
+        "keywords": ["diffusion", "transformer"]
+    },
+    {
+        "username": "李四",
+        "email": "user2@163.com",
+        "categories": "cs.LG,cs.CL",
+        "frequency": "weekly",
+        "keywords": ["large language model"]
+    },
+    {
+        "username": "王五",
+        "email": "user3@gmail.com",
+        "categories": "cs.GR",
+        "frequency": "monthly",
+        "keywords": ["3d reconstruction"]
+    }
+]
