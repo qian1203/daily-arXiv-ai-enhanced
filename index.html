@@ -265,12 +265,13 @@
     </div>
     <div class="form-item">
       <label for="pushTime">推送时间（北京时间）：</label>
-      <select id="pushTime" class="form-select">
-        <option value="09">早上 09:00</option>
-        <option value="12">中午 12:00</option>
-        <option value="18">晚上 18:00</option>
-        <option value="21">晚上 21:00</option>
-      </select>
+    <select id="pushTime" class="form-select">
+  <option value="09:00">早上 09:00</option>
+  <option value="12:00">中午 12:00</option>
+  <option value="13:00" selected>下午 13:00</option>
+  <option value="18:00">晚上 18:00</option>
+  <option value="21:00">晚上 21:00</option>
+</select>
     </div>
     <button id="saveBtn">💾 保存并启用订阅</button>
     <p class="hint">提示：您的配置将保存在仓库的subscribers.json文件中，仅您和仓库管理员可见。</p>
