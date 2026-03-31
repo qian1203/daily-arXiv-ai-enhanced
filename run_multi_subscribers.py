@@ -42,33 +42,46 @@ def update_subscribers(subscribers, sha):
     )
 
 def should_push(subscriber, now_utc):
-    """判断当前是否应该给该用户推送"""
-    freq = subscriber["frequency"]
-    push_hour = int(subscriber["pushTime"])
-    last_push = subscriber.get("lastPushDate")
-    
-    # ✅ 修正1：安全地将UTC转换为北京时间
+    # 北京时间 = UTC时间 +8小时
     now_beijing = now_utc + timedelta(hours=8)
-    today_str = now_beijing.strftime("%Y-%m-%d")
     current_hour = now_beijing.hour
+    current_weekday = now_beijing.weekday()  # 0=周一，6=周日
+    current_day = now_beijing.day
 
-    # 检查时间是否匹配
-    if current_hour != push_hour:
+    # 🔴 核心修复：兼容 HH:MM 和 HH 两种格式，加异常兜底
+    push_time_raw = subscriber.get("pushTime", "13")
+    try:
+        # 如果是 HH:MM 格式，拆分取小时部分
+        if ":" in push_time_raw:
+            push_hour = int(push_time_raw.split(":")[0])
+        else:
+            # 纯数字格式，直接转整数
+            push_hour = int(push_time_raw)
+    except (ValueError, TypeError):
+        # 格式错误时，默认13点推送，避免整个任务崩溃
+        print(f"⚠️  用户{subscriber.get('email')}的pushTime格式错误，使用默认13点推送")
+        push_hour = 13
+
+    frequency = subscriber.get("frequency", "daily")
+    last_push = subscriber.get("lastPushDate")
+    today_beijing = now_beijing.strftime("%Y-%m-%d")
+
+    # 今天已经推送过，跳过重复发送
+    if last_push == today_beijing:
         return False
-    # 检查今天是否已经推送过
-    if last_push == today_str:
-        return False
+
+    # 推送频次校验
+    if frequency == "daily":
+        # 工作日推送，且当前小时匹配
+        return current_weekday < 5 and current_hour == push_hour
+    elif frequency == "weekly":
+        # 每周一推送，且当前小时匹配
+        return current_weekday == 0 and current_hour == push_hour
+    elif frequency == "monthly":
+        # 每月1号推送，且当前小时匹配
+        return current_day == 1 and current_hour == push_hour
     
-    # 检查频次
-    weekday = now_beijing.weekday()  # 0=周一, 6=周日
-    if freq == "daily" and weekday >= 5:
-        return False  # 工作日推送，周末跳过
-    if freq == "weekly" and weekday != 0:
-        return False  # 仅周一推送
-    if freq == "monthly" and now_beijing.day != 1:
-        return False  # 仅每月1日推送
-    
-    return True
+    return False
 
 def fetch_papers(categories, days=1):
     """爬取指定分类的论文"""
