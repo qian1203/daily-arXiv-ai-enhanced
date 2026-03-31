@@ -1,1 +1,13 @@
-[]
+[
+  {
+    "id": "user_30f4e92e",
+    "email": "3481155316@qq.com",
+    "categories": [
+      "cs.GR"
+    ],
+    "frequency": "daily",
+    "pushTime": "09:00",
+    "lastPushDate": null,
+    "createdAt": "2026-03-31"
+  }
+]
