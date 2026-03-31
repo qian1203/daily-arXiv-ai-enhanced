@@ -272,7 +272,9 @@
   <option value="21:00">晚上 21:00</option>
 </select>
     </div>
-    <button id="saveBtn">💾 保存并启用订阅</button>
+        <button id="saveBtn">💾 保存并启用订阅</button>
+    <!-- 🔴 新增：立即测试推送按钮 -->
+    <button id="forcePushBtn" style="margin-top: 10px; background-color: #e74c3c; display: none;">🚀 立即测试推送（仅测试）</button>
     <p class="hint">提示：您的配置将加密保存在仓库的 subscribers.json 文件中，仅用于论文推送。</p>
   </div>
 </div>
@@ -290,6 +292,81 @@
         </svg>
     </button>
     <script>
+        // 🔴 新增：立即测试推送按钮逻辑
+const forcePushBtn = document.getElementById('forcePushBtn');
+let currentUserId = null;
+
+// 保存成功后，显示「立即推送」按钮，并保存当前用户ID
+// （在原来的 saveBtn 点击事件的 alert('订阅设置已保存！...') 后面添加）
+// 修改原来的 saveBtn 成功逻辑：
+/*
+    if (updateRes.ok) {
+      alert('订阅设置已保存！GitHub Actions将按您的设置自动推送论文。');
+      modal.style.display = 'none';
+      // 🔴 新增：显示测试按钮，保存用户ID
+      currentUserId = userId;
+      forcePushBtn.style.display = 'block';
+      location.reload();
+    }
+*/
+
+// 🔴 新增：立即推送按钮的点击事件
+forcePushBtn.addEventListener('click', async () => {
+  if (!currentUserId) {
+    alert('请先保存订阅配置！');
+    return;
+  }
+  if (!confirm(`确定要立即测试推送吗？\n这将忽略时间/频次限制，直接给您发送一封测试邮件。`)) {
+    return;
+  }
+
+  const githubToken = githubTokenInput.value.trim();
+  if (!githubToken) {
+    alert('请先输入GitHub PAT！');
+    return;
+  }
+
+  forcePushBtn.disabled = true;
+  forcePushBtn.textContent = '⏳ 正在触发推送...';
+
+  try {
+    // 调用 GitHub API 触发 workflow_dispatch
+    const repoOwner = 'qian1203'; // 替换为你的用户名
+    const repoName = 'daily-arXiv-ai-enhanced';
+    const workflowId = 'arXiv-daily-ai-enhanced.yml'; // 或你的 workflow 文件名
+    
+    // 先获取 workflow_id（如果文件名不对，需要用数字ID）
+    // 这里简化处理，直接用文件名触发
+    const response = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/actions/workflows/run.yml/dispatches`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `token ${githubToken}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/vnd.github.v3+json'
+      },
+      body: JSON.stringify({
+        ref: 'main',
+        inputs: {
+          force_push_user_id: currentUserId
+        }
+      })
+    });
+
+    if (response.ok) {
+      alert('✅ 推送任务已触发！\n请前往 Actions 页面查看进度，约1-2分钟后查收邮件。');
+      // 打开 Actions 页面
+      window.open(`https://github.com/${repoOwner}/${repoName}/actions`, '_blank');
+    } else {
+      const error = await response.json();
+      alert(`❌ 触发失败：${error.message || '请检查PAT权限是否包含 workflow'}`);
+    }
+  } catch (error) {
+    alert(`❌ 触发失败：${error.message}`);
+  } finally {
+    forcePushBtn.disabled = false;
+    forcePushBtn.textContent = '🚀 立即测试推送（仅测试）';
+  }
+});
 // 获取DOM元素
 const modal = document.getElementById('settingsModal');
 const closeBtn = document.querySelector('.close-btn');
