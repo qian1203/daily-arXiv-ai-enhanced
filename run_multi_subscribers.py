@@ -41,28 +41,31 @@ def update_subscribers(subscribers, sha):
         sha=sha
     )
 
-def should_push(subscriber, now):
+def should_push(subscriber, now_utc):
     """判断当前是否应该给该用户推送"""
     freq = subscriber["frequency"]
     push_hour = int(subscriber["pushTime"])
     last_push = subscriber.get("lastPushDate")
-    today = now.strftime("%Y-%m-%d")
-    current_hour = now.hour + 8  # UTC转北京时间
+    
+    # ✅ 修正1：安全地将UTC转换为北京时间
+    now_beijing = now_utc + timedelta(hours=8)
+    today_str = now_beijing.strftime("%Y-%m-%d")
+    current_hour = now_beijing.hour
 
     # 检查时间是否匹配
     if current_hour != push_hour:
         return False
     # 检查今天是否已经推送过
-    if last_push == today:
+    if last_push == today_str:
         return False
     
     # 检查频次
-    weekday = now.weekday()  # 0=周一, 6=周日
+    weekday = now_beijing.weekday()  # 0=周一, 6=周日
     if freq == "daily" and weekday >= 5:
         return False  # 工作日推送，周末跳过
     if freq == "weekly" and weekday != 0:
         return False  # 仅周一推送
-    if freq == "monthly" and now.day != 1:
+    if freq == "monthly" and now_beijing.day != 1:
         return False  # 仅每月1日推送
     
     return True
@@ -73,6 +76,9 @@ def fetch_papers(categories, days=1):
     end_date = datetime.now()
     start_date = end_date - timedelta(days=days)
     
+    # ✅ 修正2：兼容 arxiv 2.x 语法
+    client = arxiv.Client()
+    
     for category in categories:
         try:
             search = arxiv.Search(
@@ -80,7 +86,8 @@ def fetch_papers(categories, days=1):
                 max_results=20,
                 sort_by=arxiv.SortCriterion.SubmittedDate
             )
-            for result in search.results():
+            # 使用 client.results() 替代 search.results()
+            for result in client.results(search):
                 if result.published.date() >= start_date.date():
                     all_papers.append({
                         "title": result.title,
@@ -92,7 +99,16 @@ def fetch_papers(categories, days=1):
                     })
         except Exception as e:
             print(f"Error fetching {category}: {e}")
-    return all_papers[:30]  # 限制最多30篇
+    
+    # 简单去重（避免同一篇论文属于多个分类被重复推送）
+    seen_urls = set()
+    unique_papers = []
+    for p in all_papers:
+        if p['url'] not in seen_urls:
+            seen_urls.add(p['url'])
+            unique_papers.append(p)
+            
+    return unique_papers[:30]
 
 def generate_summary(paper):
     """生成AI摘要"""
@@ -117,7 +133,7 @@ def send_email(subscriber, papers):
     msg = MIMEMultipart()
     msg['From'] = SMTP_USER
     msg['To'] = subscriber['email']
-    msg['Subject'] = f"📚 arXiv每日论文推送 - {datetime.now().strftime('%Y-%m-%d')}"
+    msg['Subject'] = f"📚 arXiv每日论文推送 - {(datetime.now() + timedelta(hours=8)).strftime('%Y-%m-%d')}"
 
     # 构建邮件内容
     html_content = f"""
@@ -145,18 +161,30 @@ def send_email(subscriber, papers):
     """
     msg.attach(MIMEText(html_content, 'html'))
 
-    # 发送邮件
-    with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT) as server:
+    # ✅ 修正3：兼容 SSL (465) 和 STARTTLS (587)
+    try:
+        if SMTP_PORT == 587:
+            server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+            server.starttls()
+        else:
+            server = smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT)
+        
         server.login(SMTP_USER, SMTP_PASSWORD)
         server.send_message(msg)
+        server.quit()
+        print(f"Email sent successfully to {subscriber['email']}")
+    except Exception as e:
+        print(f"Failed to send email: {e}")
+        raise e
 
 def main():
-    now = datetime.utcnow()
+    now_utc = datetime.utcnow()
     subscribers, sha = get_subscribers()
     updated_subscribers = subscribers.copy()
+    has_updates = False
 
     for i, subscriber in enumerate(subscribers):
-        if should_push(subscriber, now):
+        if should_push(subscriber, now_utc):
             print(f"Processing subscriber: {subscriber['email']}")
             
             # 确定爬取天数
@@ -174,12 +202,15 @@ def main():
             # 发送邮件
             if papers:
                 send_email(subscriber, papers)
-                updated_subscribers[i]['lastPushDate'] = now.strftime("%Y-%m-%d")
+                # 更新为北京时间的日期
+                updated_subscribers[i]['lastPushDate'] = (now_utc + timedelta(hours=8)).strftime("%Y-%m-%d")
+                has_updates = True
                 print(f"Push sent to {subscriber['email']}")
     
     # 更新订阅者配置
-    if updated_subscribers != subscribers:
+    if has_updates:
         update_subscribers(updated_subscribers, sha)
+        print("Subscribers updated.")
 
 if __name__ == "__main__":
     main()
