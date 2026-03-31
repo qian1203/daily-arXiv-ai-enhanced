@@ -272,7 +272,9 @@
   <option value="21:00">晚上 21:00</option>
 </select>
     </div>
-    <button id="saveBtn">💾 保存并启用订阅</button>
+        <button id="saveBtn">💾 保存并启用订阅</button>
+    <!-- 🔴 新增：立即测试推送按钮 -->
+    <button id="forcePushBtn" style="margin-top: 10px; background-color: #e74c3c; display: none;">🚀 立即测试推送（仅测试）</button>
     <p class="hint">提示：您的配置将加密保存在仓库的 subscribers.json 文件中，仅用于论文推送。</p>
   </div>
 </div>
@@ -289,171 +291,248 @@
             <path d="M7 14L12 9L17 14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
     </button>
-    <script>
-// 获取DOM元素
-const modal = document.getElementById('settingsModal');
-const closeBtn = document.querySelector('.close-btn');
-const saveBtn = document.getElementById('saveBtn');
-const githubTokenInput = document.getElementById('githubToken');
-const emailInput = document.getElementById('email');
-const categoriesInput = document.getElementById('categories');
-const pushFrequencyInput = document.getElementById('pushFrequency');
-const pushTimeInput = document.getElementById('pushTime');
+        <script>
+        // ==================== 配置区域（请根据实际情况修改） ====================
+        const CONFIG = {
+            repoOwner: 'qian1203',        // 替换为你的 GitHub 用户名
+            repoName: 'daily-arXiv-ai-enhanced', // 替换为你的仓库名
+            workflowFileName: 'run.yml'    // 你的 Workflow 文件名
+        };
+        // =========================================================================
 
-// 生成唯一用户ID（基于邮箱哈希）
-function generateUserId(email) {
-  let hash = 0;
-  for (let i = 0; i < email.length; i++) {
-    const char = email.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash;
-  }
-  return 'user_' + Math.abs(hash).toString(16);
-}
+        // 获取DOM元素
+        const modal = document.getElementById('settingsModal');
+        const closeBtn = document.querySelector('.close-btn');
+        const saveBtn = document.getElementById('saveBtn');
+        const forcePushBtn = document.getElementById('forcePushBtn');
+        const githubTokenInput = document.getElementById('githubToken');
+        const emailInput = document.getElementById('email');
+        const categoriesInput = document.getElementById('categories');
+        const pushFrequencyInput = document.getElementById('pushFrequency');
+        const pushTimeInput = document.getElementById('pushTime');
 
-// 页面加载时回填已保存的设置
-window.addEventListener('load', () => {
-  const savedToken = localStorage.getItem('github_pat');
-  const savedEmail = localStorage.getItem('arxiv_user_email');
-  const savedCategories = localStorage.getItem('arxiv_user_categories');
-  const savedFrequency = localStorage.getItem('arxiv_push_frequency');
-  const savedTime = localStorage.getItem('arxiv_push_time');
+        let currentUserId = null; // 全局保存当前用户ID，用于强制推送
 
-  if (savedToken) githubTokenInput.value = savedToken;
-  if (savedEmail) {
-    emailInput.value = savedEmail;
-    categoriesInput.value = savedCategories || '';
-    pushFrequencyInput.value = savedFrequency || 'daily';
-    pushTimeInput.value = savedTime || '09';
-  } else {
-    modal.style.display = 'block';
-  }
-});
+        // 生成唯一用户ID（基于邮箱哈希）
+        function generateUserId(email) {
+            let hash = 0;
+            for (let i = 0; i < email.length; i++) {
+                const char = email.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash;
+            }
+            return 'user_' + Math.abs(hash).toString(16);
+        }
 
-// 关闭弹窗
-closeBtn.addEventListener('click', () => modal.style.display = 'none');
-window.addEventListener('click', (e) => {
-  if (e.target === modal) modal.style.display = 'none';
-});
+        // 工具函数：将 "HH:MM" 转换为纯数字 "HH"（适配后端逻辑）
+        function formatPushTimeForBackend(timeStr) {
+            return timeStr.split(':')[0];
+        }
 
-// 保存设置并提交到GitHub
-saveBtn.addEventListener('click', async () => {
-  const githubToken = githubTokenInput.value.trim();
-  const email = emailInput.value.trim();
-  const categories = categoriesInput.value.trim();
-  const frequency = pushFrequencyInput.value;
-  const pushTime = pushTimeInput.value;
+        // 页面加载时回填已保存的设置
+        window.addEventListener('load', () => {
+            const savedToken = localStorage.getItem('github_pat');
+            const savedEmail = localStorage.getItem('arxiv_user_email');
+            const savedCategories = localStorage.getItem('arxiv_user_categories');
+            const savedFrequency = localStorage.getItem('arxiv_push_frequency');
+            const savedTime = localStorage.getItem('arxiv_push_time');
 
-  if (!githubToken) {
-    alert('请先输入GitHub Personal Access Token！');
-    return;
-  }
-  if (!email) {
-    alert('请输入邮箱地址！');
-    return;
-  }
+            if (savedToken) githubTokenInput.value = savedToken;
+            if (savedEmail) {
+                emailInput.value = savedEmail;
+                categoriesInput.value = savedCategories || '';
+                pushFrequencyInput.value = savedFrequency || 'daily';
+                pushTimeInput.value = savedTime || '13:00'; // 默认显示13:00
+            } else {
+                modal.style.display = 'block';
+            }
+        });
 
-  // 保存到本地
-  localStorage.setItem('github_pat', githubToken);
-  localStorage.setItem('arxiv_user_email', email);
-  localStorage.setItem('arxiv_user_categories', categories);
-  localStorage.setItem('arxiv_push_frequency', frequency);
-  localStorage.setItem('arxiv_push_time', pushTime);
+        // 关闭弹窗
+        closeBtn.addEventListener('click', () => modal.style.display = 'none');
+        window.addEventListener('click', (e) => {
+            if (e.target === modal) modal.style.display = 'none';
+        });
 
-  // 构建用户配置
-  const userId = generateUserId(email);
-  
-  try {
-    // 【重要】请替换为你的GitHub用户名和仓库名
-    const repoOwner = 'qian1203'; 
-    const repoName = 'daily-arXiv-ai-enhanced';
-    const fileUrl = `https://api.github.com/repos/${repoOwner}/${repoName}/contents/subscribers.json`;
-    
-    // 1. 获取当前subscribers.json的SHA
-    const getFileRes = await fetch(fileUrl, {
-      headers: { 'Authorization': `token ${githubToken}` }
-    });
+        // ------------------------------
+        // 1. 保存订阅配置逻辑
+        // ------------------------------
+        saveBtn.addEventListener('click', async () => {
+            const githubToken = githubTokenInput.value.trim();
+            const email = emailInput.value.trim();
+            const categories = categoriesInput.value.trim();
+            const frequency = pushFrequencyInput.value;
+            const pushTimeDisplay = pushTimeInput.value; // 前端显示用 "HH:MM"
+            
+            // 🔴 关键修正：传给后端的是纯数字 "HH"
+            const pushTimeBackend = formatPushTimeForBackend(pushTimeDisplay);
 
-    // ✅ 修正1：先检查API响应状态
-    if (!getFileRes.ok) {
-      const errorText = await getFileRes.text();
-      let errorMsg = '请检查PAT权限是否正确（必须勾选repo权限）';
-      if (getFileRes.status === 401) errorMsg = 'PAT无效，请重新生成';
-      if (getFileRes.status === 404) errorMsg = '仓库或文件不存在，请检查repoOwner和repoName';
-      alert(`保存失败：${errorMsg}`);
-      return;
-    }
+            if (!githubToken) {
+                alert('请先输入GitHub Personal Access Token！');
+                return;
+            }
+            if (!email) {
+                alert('请输入邮箱地址！');
+                return;
+            }
 
-    const fileData = await getFileRes.json();
-    const currentSha = fileData.sha;
-    
-    // ✅ 修正2：处理空文件/首次使用的情况
-    let currentContent = [];
-    if (fileData.content) {
-      try {
-        currentContent = JSON.parse(atob(fileData.content));
-      } catch (e) {
-        // 如果文件内容不是有效JSON，初始化为空数组
-        currentContent = [];
-      }
-    }
+            // 保存到本地
+            localStorage.setItem('github_pat', githubToken);
+            localStorage.setItem('arxiv_user_email', email);
+            localStorage.setItem('arxiv_user_categories', categories);
+            localStorage.setItem('arxiv_push_frequency', frequency);
+            localStorage.setItem('arxiv_push_time', pushTimeDisplay);
 
-    // ✅ 修正3：更新配置时保留原有的lastPushDate
-    const existingIndex = currentContent.findIndex(u => u.id === userId);
-    const existingConfig = existingIndex >= 0 ? currentContent[existingIndex] : {};
-    const userConfig = {
-      id: userId,
-      email: email,
-      categories: categories ? categories.split(',').map(c => c.trim()) : ['cs.CV', 'cs.CL', 'cs.AI'],
-      frequency: frequency,
-      pushTime: pushTime,
-      // 保留原有的lastPushDate，避免重复推送
-      lastPushDate: existingConfig.lastPushDate || null,
-      createdAt: existingConfig.createdAt || new Date().toISOString().split('T')[0]
-    };
+            // 构建用户配置
+            const userId = generateUserId(email);
+            currentUserId = userId; // 保存到全局变量
+            
+            try {
+                const fileUrl = `https://api.github.com/repos/${CONFIG.repoOwner}/${CONFIG.repoName}/contents/subscribers.json`;
+                
+                // 1. 获取当前subscribers.json的SHA
+                const getFileRes = await fetch(fileUrl, {
+                    headers: { 'Authorization': `token ${githubToken}` }
+                });
 
-    if (existingIndex >= 0) {
-      currentContent[existingIndex] = userConfig;
-    } else {
-      currentContent.push(userConfig);
-    }
+                if (!getFileRes.ok) {
+                    const errorText = await getFileRes.text();
+                    let errorMsg = '请检查PAT权限是否正确（必须勾选repo权限）';
+                    if (getFileRes.status === 401) errorMsg = 'PAT无效，请重新生成';
+                    if (getFileRes.status === 404) errorMsg = '仓库或文件不存在，请检查repoOwner和repoName';
+                    alert(`保存失败：${errorMsg}`);
+                    return;
+                }
 
-    // 3. 提交更新到GitHub
-    const updateRes = await fetch(fileUrl, {
-      method: 'PUT',
-      headers: {
-        'Authorization': `token ${githubToken}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        message: `Update subscription for ${email}`,
-        content: btoa(JSON.stringify(currentContent, null, 2)),
-        sha: currentSha
-      })
-    });
+                const fileData = await getFileRes.json();
+                const currentSha = fileData.sha;
+                
+                let currentContent = [];
+                if (fileData.content) {
+                    try {
+                        currentContent = JSON.parse(atob(fileData.content));
+                    } catch (e) {
+                        currentContent = [];
+                    }
+                }
 
-    if (updateRes.ok) {
-      alert('订阅设置已保存！GitHub Actions将按您的设置自动推送论文。');
-      modal.style.display = 'none';
-      location.reload();
-    } else {
-      const error = await updateRes.json();
-      alert(`保存失败：${error.message || '请检查PAT权限是否正确'}`);
-    }
-  } catch (error) {
-    alert(`保存失败：${error.message}`);
-  }
-});
+                // 更新配置
+                const existingIndex = currentContent.findIndex(u => u.id === userId);
+                const existingConfig = existingIndex >= 0 ? currentContent[existingIndex] : {};
+                const userConfig = {
+                    id: userId,
+                    email: email,
+                    categories: categories ? categories.split(',').map(c => c.trim()) : ['cs.CV', 'cs.CL', 'cs.AI'],
+                    frequency: frequency,
+                    pushTime: pushTimeBackend, // 🔴 保存纯数字给后端
+                    lastPushDate: existingConfig.lastPushDate || null,
+                    createdAt: existingConfig.createdAt || new Date().toISOString().split('T')[0]
+                };
 
-// 点击右上角齿轮按钮打开弹窗
-const settingsButton = document.querySelector('a[href="settings.html"]').closest('.icon-button');
-if (settingsButton) {
-  settingsButton.addEventListener('click', (e) => {
-    e.preventDefault();
-    modal.style.display = 'block';
-  });
-}
-</script>
+                if (existingIndex >= 0) {
+                    currentContent[existingIndex] = userConfig;
+                } else {
+                    currentContent.push(userConfig);
+                }
+
+                // 3. 提交更新到GitHub
+                const updateRes = await fetch(fileUrl, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `token ${githubToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: `Update subscription for ${email}`,
+                        content: btoa(JSON.stringify(currentContent, null, 2)),
+                        sha: currentSha
+                    })
+                });
+
+                if (updateRes.ok) {
+                    alert('订阅设置已保存！\n\n点击「确定」后将显示「立即测试推送」按钮。');
+                    // 🔴 显示测试按钮
+                    forcePushBtn.style.display = 'block';
+                    // 不关闭弹窗，让用户可以直接点测试
+                } else {
+                    const error = await updateRes.json();
+                    alert(`保存失败：${error.message || '请检查PAT权限是否正确'}`);
+                }
+            } catch (error) {
+                alert(`保存失败：${error.message}`);
+            }
+        });
+
+        // ------------------------------
+        // 2. 立即测试推送逻辑
+        // ------------------------------
+        forcePushBtn.addEventListener('click', async () => {
+            if (!currentUserId) {
+                alert('请先点击「保存并启用订阅」！');
+                return;
+            }
+            if (!confirm(`确定要立即测试推送吗？\n\n这将忽略时间/频次限制，直接给您发送一封测试邮件。`)) {
+                return;
+            }
+
+            const githubToken = githubTokenInput.value.trim();
+            if (!githubToken) {
+                alert('请先输入GitHub PAT！');
+                return;
+            }
+
+            forcePushBtn.disabled = true;
+            forcePushBtn.textContent = '⏳ 正在触发推送...';
+
+            try {
+                // 调用 GitHub API 触发 workflow_dispatch
+                const apiUrl = `https://api.github.com/repos/${CONFIG.repoOwner}/${CONFIG.repoName}/actions/workflows/${CONFIG.workflowFileName}/dispatches`;
+                
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `token ${githubToken}`,
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/vnd.github.v3+json'
+                    },
+                    body: JSON.stringify({
+                        ref: 'main',
+                        inputs: {
+                            force_push_user_id: currentUserId
+                        }
+                    })
+                });
+
+                if (response.ok) {
+                    alert('✅ 推送任务已触发！\n\n请点击「确定」前往 Actions 页面查看进度，约1-2分钟后查收邮件。');
+                    // 打开 Actions 页面
+                    window.open(`https://github.com/${CONFIG.repoOwner}/${CONFIG.repoName}/actions`, '_blank');
+                    modal.style.display = 'none';
+                } else {
+                    const error = await response.json();
+                    let errMsg = error.message || '未知错误';
+                    if(errMsg.includes('permission')) {
+                        errMsg = 'PAT权限不足！请确保PAT勾选了「repo」和「workflow」权限。';
+                    }
+                    alert(`❌ 触发失败：${errMsg}`);
+                }
+            } catch (error) {
+                alert(`❌ 触发失败：${error.message}`);
+            } finally {
+                forcePushBtn.disabled = false;
+                forcePushBtn.textContent = '🚀 立即测试推送（仅测试）';
+            }
+        });
+
+        // 点击右上角齿轮按钮打开弹窗
+        const settingsButton = document.querySelector('a[href="settings.html"]').closest('.icon-button');
+        if (settingsButton) {
+            settingsButton.addEventListener('click', (e) => {
+                e.preventDefault();
+                modal.style.display = 'block';
+            });
+        }
+    </script>
     <script src="js/app.js?v=1.0.1"></script>
 </body>
 </html> 
