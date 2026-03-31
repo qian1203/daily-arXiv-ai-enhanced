@@ -183,15 +183,24 @@ def main():
     updated_subscribers = subscribers.copy()
     has_updates = False
 
+    # 🔴 新增：读取强制推送的用户ID（来自GitHub Actions输入）
+    FORCE_PUSH_USER_ID = os.getenv("FORCE_PUSH_USER_ID", "")
+
     for i, subscriber in enumerate(subscribers):
-        if should_push(subscriber, now_utc):
+        # 🔴 新增：判断是正常定时推送，还是强制手动推送
+        is_normal_push = should_push(subscriber, now_utc)
+        is_force_push = FORCE_PUSH_USER_ID and subscriber.get("id") == FORCE_PUSH_USER_ID
+
+        if is_normal_push or is_force_push:
             print(f"Processing subscriber: {subscriber['email']}")
+            if is_force_push:
+                print(f"⚠️  强制推送模式：忽略时间/频次检查")
             
-            # 确定爬取天数
+            # 确定爬取天数（强制推送默认爬1天）
             days = 1
-            if subscriber['frequency'] == 'weekly':
+            if subscriber['frequency'] == 'weekly' and not is_force_push:
                 days = 7
-            elif subscriber['frequency'] == 'monthly':
+            elif subscriber['frequency'] == 'monthly' and not is_force_push:
                 days = 30
             
             # 爬取论文并生成摘要
@@ -202,12 +211,13 @@ def main():
             # 发送邮件
             if papers:
                 send_email(subscriber, papers)
-                # 更新为北京时间的日期
-                updated_subscribers[i]['lastPushDate'] = (now_utc + timedelta(hours=8)).strftime("%Y-%m-%d")
-                has_updates = True
+                # 🔴 新增：强制推送时，不更新 lastPushDate（避免影响正常定时推送）
+                if not is_force_push:
+                    updated_subscribers[i]['lastPushDate'] = (now_utc + timedelta(hours=8)).strftime("%Y-%m-%d")
+                    has_updates = True
                 print(f"Push sent to {subscriber['email']}")
     
-    # 更新订阅者配置
+    # 更新订阅者配置（仅正常推送时更新）
     if has_updates:
         update_subscribers(updated_subscribers, sha)
         print("Subscribers updated.")
