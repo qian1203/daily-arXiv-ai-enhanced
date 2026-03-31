@@ -119,7 +119,7 @@ jobs:
             echo "AI处理失败 / AI processing failed"
             exit 1
         fi
-        echo "AI增强处理完成 / AI enhancement processing completed"
+        echo "AI增强处理完成 / AI enhancement completed"
         
     - name: Convert to Markdown
       if: steps.dedup_check.outputs.has_new_content == 'true'
@@ -404,15 +404,23 @@ jobs:
       contents: write
     steps:
     - uses: actions/checkout@v4
-    - name: Install dependencies (匹配原项目环境)
+    
+    # 1. 设置 Python 环境
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+
+    # 2. 直接用 pip 安装依赖（移除 uv 和 venv，避免环境隔离问题）
+    - name: Install dependencies for email push
       run: |
-        curl -LsSf https://astral.sh/uv/install.sh | sh
-        uv sync
+        python -m pip install --upgrade pip
+        pip install arxiv openai PyGithub
+
+    # 3. 直接运行脚本（无需激活虚拟环境）
     - name: Run multi-subscriber email push
-      run: |
-        source .venv/bin/activate
-        # 【正确脚本名】与你创建的Python脚本一致
-        python run_multi_subscribers.py
+      run: python run_multi_subscribers.py
       env:
         # GitHub 令牌（更新订阅配置）
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
