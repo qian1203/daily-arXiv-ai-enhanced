@@ -3,19 +3,27 @@
 
 name: arXiv-daily-ai-enhanced
 
+# 全局环境变量：强制所有JS Action用Node.js 24运行，消除弃用警告
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 on:
   schedule:
     # 【爬取改为】北京时间 13:00（UTC 05:00）每天执行
     - cron: "0 5 * * *"
     - cron: "*/30 * * * *"
   workflow_dispatch:
+    # ✅ 正确定义工作流输入参数
+    inputs:
+      force_push_user_id:
+        description: "【可选】强制推送的用户ID（留空则正常定时推送）"
+        required: false
+        type: string
 
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v4
     - name: Install dependencies
@@ -395,19 +403,12 @@ jobs:
           fi
         done
 
-  # ✅【已修正】独立多用户邮件推送任务，每小时自动运行
-    # ✅【已修正+新增手动推送】独立多用户邮件推送任务
+  # ✅【已修正语法】独立多用户邮件推送任务
   multi-user-email-push:
     if: always()
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    # 🔴 新增：允许手动输入用户ID
-    inputs:
-      force_push_user_id:
-        description: "【可选】强制推送的用户ID（留空则正常定时推送）"
-        required: false
-        type: string
     steps:
     - uses: actions/checkout@v4
     
@@ -433,5 +434,5 @@ jobs:
         SMTP_PORT: ${{ secrets.SMTP_PORT }}
         SMTP_USER: ${{ secrets.SMTP_USER }}
         SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
-        # 🔴 新增：传递强制推送的用户ID
+        # ✅ 正确引用顶层定义的输入参数
         FORCE_PUSH_USER_ID: ${{ inputs.force_push_user_id || '' }}
